@@ -107,18 +107,21 @@ def add_log(msg, level="info"):
 
 # ── Rate table helpers ─────────────────────────────────────────────────────
 def load_rate_table_from_df(df):
-    """Parse uploaded dataframe into {site_code: {name, rate_from, rate_to}}"""
+    """Parse uploaded dataframe into {site_code: {name, rate}}"""
     df.columns = [c.strip().lower().replace(" ","_") for c in df.columns]
     rate_map = {}
     for _, row in df.iterrows():
         code = str(row.get("site_code", row.get("code",""))).strip()
         if not code or code == "nan": continue
+        # Accept 'rate', 'freight_rate', 'rate_from', or 'rate_to' as single rate
+        rate = _safe_float(row.get("rate",
+               row.get("freight_rate",
+               row.get("freight",
+               row.get("rate_from",
+               row.get("rate_to", None))))))
         rate_map[code] = {
-            "site_name":  str(row.get("site_name", row.get("name",""))).strip(),
-            "rate_from":  _safe_float(row.get("rate_from", row.get("from_rate",
-                          row.get("freight_from", None)))),
-            "rate_to":    _safe_float(row.get("rate_to",   row.get("to_rate",
-                          row.get("freight_to", None)))),
+            "site_name": str(row.get("site_name", row.get("name",""))).strip(),
+            "rate":      rate,
         }
     return rate_map
 
@@ -127,15 +130,16 @@ def _safe_float(val):
     except: return None
 
 def check_rates(data, rate_table):
-    """Returns list of mismatch dicts for a single extracted record."""
+    """Compare each site's PDF rate against its single expected rate."""
     mismatches = []
     if not rate_table: return mismatches
 
     from_code = str(data.get("from_site_code","")).strip()
     to_code   = str(data.get("to_site_code","")).strip()
 
+    # Check FROM site rate
     if from_code in rate_table:
-        expected = rate_table[from_code].get("rate_from")
+        expected = rate_table[from_code].get("rate")
         actual   = _safe_float(data.get("rate_from"))
         if expected is not None and actual is not None and abs(expected - actual) > 0.01:
             mismatches.append({
@@ -146,8 +150,9 @@ def check_rates(data, rate_table):
                 "diff":     actual - expected,
             })
 
+    # Check TO site rate
     if to_code in rate_table:
-        expected = rate_table[to_code].get("rate_to")
+        expected = rate_table[to_code].get("rate")
         actual   = _safe_float(data.get("rate_to"))
         if expected is not None and actual is not None and abs(expected - actual) > 0.01:
             mismatches.append({
@@ -315,7 +320,7 @@ def make_rate_template():
     """Generate a downloadable rate table template."""
     buf = io.BytesIO()
     wb  = openpyxl.Workbook(); ws = wb.active; ws.title = "Rates"
-    headers = ["site_code","site_name","rate_from","rate_to"]
+    headers = ["site_code","site_name","rate"]
     thin = Side(style="thin")
     def B(): return Border(left=thin,right=thin,top=thin,bottom=thin)
     hfill = PatternFill("solid", start_color="1B5E3B")
@@ -323,15 +328,17 @@ def make_rate_template():
         c = ws.cell(row=1, column=col, value=h)
         c.font = Font(name="Arial", size=11, bold=True, color="FFFFFF"); c.fill = hfill; c.border = B()
     samples = [
-        ["5168","2203 MIRROOL GC",51.20,""],
-        ["4207","2203 RED BEND GC","",56.52],
-        ["6104","2203 GILGANDRA GC",59.33,63.59],
+        ["5168","2203 MIRROOL GC", 51.20],
+        ["4207","2203 RED BEND GC", 56.52],
+        ["6104","2203 GILGANDRA GC", 59.33],
+        ["5077","2203 CUNNINGAR GC", 35.84],
+        ["6065","2203 COONAMBLE GC", 66.78],
     ]
     for ri, row in enumerate(samples, 2):
         for ci, val in enumerate(row, 1):
             c = ws.cell(row=ri, column=ci, value=val)
             c.font = Font(name="Calibri", size=11); c.border = B()
-    for i, w in enumerate([12, 26, 12, 12], 1):
+    for i, w in enumerate([12, 26, 12], 1):
         ws.column_dimensions[get_column_letter(i)].width = w
     wb.save(buf); buf.seek(0)
     return buf.read()
@@ -413,10 +420,10 @@ with tab_rates:
         |---|---|---|
         | `site_code` | Numeric site code | `5168` |
         | `site_name` | Site name | `2203 MIRROOL GC` |
-        | `rate_from` | Expected freight rate FROM this site | `51.20` |
-        | `rate_to` | Expected freight rate TO this site | `56.52` |
+        | `rate` | Freight rate for this site | `51.20` |
 
-        Leave `rate_from` or `rate_to` blank if a site only applies one way.
+        Each site has one rate. The app checks the FROM site rate against `Rate From`
+        in the PDF, and the TO site rate against `Rate To` in the PDF.
         """)
     with col2:
         st.markdown("#### Download template")
@@ -460,19 +467,16 @@ with tab_rates:
 
         rows_html = ""
         for code, info in st.session_state.rate_table.items():
-            rf = f"${info['rate_from']:.2f}" if info.get('rate_from') is not None else "—"
-            rt = f"${info['rate_to']:.2f}"   if info.get('rate_to')   is not None else "—"
+            rate = f"${info['rate']:.2f}" if info.get('rate') is not None else "—"
             rows_html += f"""<tr>
                 <td><code>{code}</code></td>
                 <td>{info.get('site_name','—')}</td>
-                <td style='color:#1B5E3B;font-weight:600;'>{rf}</td>
-                <td style='color:#1565C0;font-weight:600;'>{rt}</td>
+                <td style='color:#1B5E3B;font-weight:600;'>{rate}</td>
             </tr>"""
 
         st.markdown(f"""<table class='hist-table'>
             <thead><tr>
-                <th>Site Code</th><th>Site Name</th>
-                <th>Rate From ($)</th><th>Rate To ($)</th>
+                <th>Site Code</th><th>Site Name</th><th>Freight Rate ($)</th>
             </tr></thead>
             <tbody>{rows_html}</tbody>
         </table>""", unsafe_allow_html=True)
