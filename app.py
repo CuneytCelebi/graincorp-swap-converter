@@ -10,7 +10,7 @@ import pandas as pd
 
 # ── Page config ────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="GrainCorp Swap Converter",
+    page_title="GC Swap Converter",
     page_icon="🌾",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -351,7 +351,7 @@ with st.sidebar:
     st.markdown("""
     <div style='background:linear-gradient(135deg,#1B5E3B,#2E7D52);
                 padding:20px;border-radius:10px;margin-bottom:20px;'>
-        <div style='color:white;font-size:20px;font-weight:700;'>🌾 GrainCorp</div>
+        <div style='color:white;font-size:20px;font-weight:700;'>🌾 GC</div>
         <div style='color:#A8D5B5;font-size:12px;margin-top:4px;'>Swap Converter</div>
     </div>""", unsafe_allow_html=True)
 
@@ -392,7 +392,7 @@ with st.sidebar:
 # TABS
 # ══════════════════════════════════════════════════════════════════════════
 st.markdown("""<div class='banner'>
-    <h1>🌾 GrainCorp Swap Converter</h1>
+    <h1>🌾 GC Swap Converter</h1>
     <p>PDF → Excel  •  Rate Validation  •  Powered by Google Gemini (Free)</p>
 </div>""", unsafe_allow_html=True)
 
@@ -430,7 +430,7 @@ with tab_rates:
         st.download_button(
             "📥 Download Rate Template",
             data=make_rate_template(),
-            file_name="GrainCorp_Rate_Template.xlsx",
+            file_name="GC_Rate_Template.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -626,7 +626,7 @@ with tab_convert:
 
                     # ── Download button ──
                     excel_bytes = build_excel(results, all_mismatches)
-                    fname = f"GrainCorp_Swaps_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+                    fname = f"GC_Swaps_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
                     st.download_button(
                         label="📥  Download Excel File",
                         data=excel_bytes,
@@ -688,7 +688,7 @@ with tab_history:
             w = csv.DictWriter(buf, fieldnames=keys, extrasaction="ignore")
             w.writeheader(); w.writerows(h)
             st.download_button("📥 Export CSV", buf.getvalue(),
-                               "GrainCorp_History.csv", "text/csv")
+                               "GC_History.csv", "text/csv")
 
     if not h:
         st.info("No history yet — convert some PDFs to see them here.")
